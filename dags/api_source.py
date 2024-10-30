@@ -6,9 +6,9 @@ import pandas as pd
 import requests
 
 with DAG(
-        dag_id="currency_source_to_stage",
+        dag_id="api_source",
         start_date=datetime(2024, 1, 1, 9),
-        schedule="@monthly",
+        schedule='0 6 * * *',
         catchup=False,
         max_active_runs=1,
         default_args={
@@ -778,7 +778,7 @@ with DAG(
                     "value": 26.7408845423
                     },
                     "ZWL": {
-                    "code": "ZWL",
+                    "code": "ZWL@@@@@@@@@@@@@@@@",
                     "value": 67470.705157091
                     }
                 }
@@ -849,18 +849,16 @@ with DAG(
                         except Exception as e:
                             print(f"An error occurred while inserting row {row['row_id']}: {e}")
                             err = {
-                                'type': 'currency',
-                                'row_id': row['row_id'],
-                                'Date': today
+                                'code': row['code'],
+                                'conv_value': row['value'],
+                                'error': str(e),
+                                'LastUpdated': today
                             }
                             errors_list.append(err)
 
                 error_df = pd.DataFrame(errors_list)
-                error_df.to_sql('error_logs', ps_engine, if_exists='append', index=False) 
+                error_df.to_sql('currency_error_logs', ps_engine, if_exists='append', index=False) 
             
-            # ms_hook = MsSqlHook(mssql_conn_id='local_mssql', schema='AdventureWorks2022')
-            # print(ms_hook.get_sqlalchemy_engine())
-            # flattened_dataframe.to_sql('currency_stage', ms_hook.get_sqlalchemy_engine(), if_exists='append', index=False)
 
         api_response = hit_currency_api()
         load_currency_data(flatten_market_data(api_response))             

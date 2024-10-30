@@ -15,3 +15,6 @@ GO
 
 DROP TABLE [dbo].[sale]
 GO
+
+DROP TABLE [dbo].[sale_detail]
+GO

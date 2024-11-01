@@ -19,15 +19,14 @@ with DAG(
     # Create a task using the TaskFlow API
         @task()
         def hit_currency_api(**context):
-            token = "cur_live_NB9zFqtbV6mVtum8uOlS1bZsg7cVMdqBwacqXQZW@"
-            #Remove the '@' at the end of the token in real run
-            #WARNING!!! There is limit for api hit !!!WARNING
+            token = "cur_live_NB9zFqtbV6mVtum8uOlS1bZsg7cVMdqBwacqXQZW"
             deployment_url = f"https://api.currencyapi.com/v3/latest?apikey={token}"
             print(deployment_url)
             # response = requests.get(
             #     url=deployment_url
             # )
             # return response.json() 
+            # In real run, unhidden three row above and delete the json returned below
             return {
                 "meta": {
                     "last_updated_at": "2024-10-21T23:59:59Z"

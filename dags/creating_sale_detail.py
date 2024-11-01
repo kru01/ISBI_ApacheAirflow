@@ -16,10 +16,13 @@ with DAG(
       }
 ) as dag:
     @task
-    def finding_price(engine):
+    def createing_sale_dt(engine):
         #Connect postgres for error logs
         ps_engine = create_engine("postgresql://postgres:postgres@host.docker.internal/logging")
         error_list = []
+
+        #As the script proposed, we are currently operating on 3 country USA, CAD and AUS. Rows with other country will be considered invalid.
+        operated_country = ['USA', 'CAD', 'AUS']
 
         # Query to fetch data
         query = "SELECT * FROM sale"
@@ -38,9 +41,6 @@ with DAG(
 
         
         for index, row in new_sale_records.iterrows():
-            # print(f"Index: {index}")
-            # print(row)
-            # Access individual elements with row['column_name']
             try: 
                 product_query = f"SELECT ListPrice FROM product WHERE ProductID = '{row['ProductID']}'"
                 product_price = (pd.read_sql(product_query, engine))['ListPrice'][0]
@@ -68,6 +68,21 @@ with DAG(
                      INSERT INTO sale_detail
                     VALUES ({row['SalesOrderID']}, {row['ProductID']}, {row['CustomerID']}, {row['OrderQty']}, {system_price}, '{customer_country_currency}', {local_price}, '{customer_country}', '{row['LastUpdated']}')
                 """
+                if customer_country not in operated_country:
+                    err = {
+                                'SalesOrderID' : row['SalesOrderID'],
+                                'ProductID' : row['ProductID'],
+                                'CustomerID' :row['CustomerID'],
+                                'OrderQty' :row['OrderQty'],
+                                'SystemPrice' : system_price,
+                                'LocalCurrency' : customer_country_currency,
+                                'LocalPrice' : local_price,
+                                'SalesCountry' : customer_country,
+                                'Error': f"We are not operating on this country yet: {customer_country}",
+                                'LastUpdated': row['LastUpdated']
+                    }
+                    error_list.append(err)
+                    raise Exception("We are not operating on this country yet: ", customer_country)
                 try:
                     with engine.connect() as connection:
                         connection.execute(query)
@@ -86,8 +101,8 @@ with DAG(
                             'LastUpdated': row['LastUpdated']
                         }
                     error_list.append(err)
-            except:
-                print("Having error extracting information", index)
+            except Exception as e:
+                print("Having error extracting information", index, " | ", e)
         error_df = pd.DataFrame(error_list)
         error_df.to_sql('sale_detail_error_logs', ps_engine, if_exists='append', index=False) 
 
@@ -99,5 +114,5 @@ with DAG(
     # Create the connection string for pymssql
     connection_string = f'mssql+pymssql://{username}:{password}@{server}/{database}'
     engine = create_engine(connection_string)   
-    finding_price(engine)
+    createing_sale_dt(engine)
   

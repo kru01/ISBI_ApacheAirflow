@@ -50,7 +50,7 @@ with DAG(
                 customer_country_query = f"SELECT Country FROM customer WHERE CustomerID = '{row['CustomerID']}'"
                 customer_country = (pd.read_sql(customer_country_query, engine))['Country'][0]
                 customer_country = customer_country.strip()
-                # print("customer_country: ", customer_country)
+                print("customer_country: ", customer_country)
 
                 customer_country_currency_query = f"SELECT currency FROM country_currency WHERE iso3='{customer_country}'"
                 customer_country_currency= (pd.read_sql(customer_country_currency_query, engine))['currency'][0]
@@ -68,6 +68,7 @@ with DAG(
                      INSERT INTO sale_detail
                     VALUES ({row['SalesOrderID']}, {row['ProductID']}, {row['CustomerID']}, {row['OrderQty']}, {system_price}, '{customer_country_currency}', {local_price}, '{customer_country}', '{row['LastUpdated']}')
                 """
+                print(query)
                 if customer_country not in operated_country:
                     err = {
                                 'SalesOrderID' : row['SalesOrderID'],
@@ -82,25 +83,25 @@ with DAG(
                                 'LastUpdated': row['LastUpdated']
                     }
                     error_list.append(err)
-                    raise Exception("We are not operating on this country yet: ", customer_country)
-                try:
-                    with engine.connect() as connection:
-                        connection.execute(query)
-                except Exception as e:
-                    print("Having error insert a new sale_detail row: ", e)
-                    err = {
-                            'SalesOrderID' : row['SalesOrderID'],
-                            'ProductID' : row['ProductID'],
-                            'CustomerID' :row['CustomerID'],
-                            'OrderQty' :row['OrderQty'],
-                            'SystemPrice' : system_price,
-                            'LocalCurrency' : customer_country_currency,
-                            'LocalPrice' : local_price,
-                            'SalesCountry' : customer_country,
-                            'Error': str(e),
-                            'LastUpdated': row['LastUpdated']
-                        }
-                    error_list.append(err)
+                else:
+                    try:
+                        with engine.connect() as connection:
+                            connection.execute(query)
+                    except Exception as e:
+                        print("Having error insert a new sale_detail row: ", e)
+                        err = {
+                                'SalesOrderID' : row['SalesOrderID'],
+                                'ProductID' : row['ProductID'],
+                                'CustomerID' :row['CustomerID'],
+                                'OrderQty' :row['OrderQty'],
+                                'SystemPrice' : system_price,
+                                'LocalCurrency' : customer_country_currency,
+                                'LocalPrice' : local_price,
+                                'SalesCountry' : customer_country,
+                                'Error': str(e),
+                                'LastUpdated': row['LastUpdated']
+                            }
+                        error_list.append(err)
             except Exception as e:
                 print("Having error extracting information", index, " | ", e)
         error_df = pd.DataFrame(error_list)

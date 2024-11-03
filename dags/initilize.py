@@ -3,7 +3,8 @@ from airflow.decorators import task
 from sqlalchemy import create_engine, text
 from datetime import datetime, timedelta, date
 import pandas as pd
-import os
+import pymssql
+import time
 
 with DAG(
       dag_id="initilize",
@@ -25,23 +26,20 @@ with DAG(
 
         # Create the connection string for pymssql
         connection_string = f'mssql+pymssql://{username}:{password}@{server}/{database}'
-        engine = create_engine(connection_string)
-        check_query = f"""
-            SELECT * FROM sys.databases WHERE name = 'ap_airflow'
-        """
+
+
+        # Create SQLAlchemy engine with autocommit
+        engine = create_engine(connection_string, isolation_level='AUTOCOMMIT')
+
+        # Create a new database
+        create_db_query = f'CREATE DATABASE [ap_airflow]'
+
         with engine.connect() as connection:
-            db = connection.execute(check_query).scalar_one_or_none()
-            if db:
-                return "ap_airflow DB already exists"
-            else:
-                create_query = f"""
-                    CREATE DATABASE [ap_airflow]
-                """
-                result = connection.execute(text(create_query).execution_options(autocommit=True)).scalar_one_or_none()
-                if result:
-                    return "Create ap_airflow db successfully"
-                else:
-                    return "Something went wrong, can't create db"
+            try:
+                connection.execute(create_db_query)
+                print(f"Database [ap_airflow] created successfully.")
+            except Exception as e:
+                print(f"There is a problem creating the DB: ", e)
     @task
     def initilize_mssql():
         # Replace with your actual connection details
@@ -49,6 +47,7 @@ with DAG(
         database = 'ap_airflow'
         username = 'sa'
         password = '12345'
+        time.sleep(2)
 
         # Create the connection string for pymssql
         connection_string = f'mssql+pymssql://{username}:{password}@{server}/{database}'
@@ -237,9 +236,9 @@ with DAG(
 
     flag_1 = create_mssql_database()
     print(flag_1)
+    initilize_postgres()
     flag_2 = initilize_mssql()
     print(flag_2)
-    initilize_postgres()
 
     #Try to ensure initilize complete before pouring source
 

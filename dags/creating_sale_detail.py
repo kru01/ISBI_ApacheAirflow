@@ -22,7 +22,7 @@ with DAG(
         error_list = []
 
         #As the script proposed, we are currently operating on 3 country USA, CAD and AUS. Rows with other country will be considered invalid.
-        operated_country = ['USA', 'CAD', 'AUS']
+        operated_country = ['USA', 'CAN', 'AUS']
 
         # Query to fetch data
         query = "SELECT * FROM sale"

@@ -5,6 +5,35 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 import requests
 
+server = 'host.docker.internal'
+database = 'ap_airflow'
+username = 'sa'
+password = '12345'
+
+# Create the connection string for pymssql
+connection_string = f'mssql+pymssql://{username}:{password}@{server}/{database}'
+engine = create_engine(connection_string)
+
+def get_LSET(table_name):
+        query = f"""
+            SELECT LSET FROM metadata
+            WHERE TABNAME = '{table_name}'
+        """
+        LSET = pd.read_sql(query, engine)
+        return (LSET['LSET'][0]).date()
+def update_LSET(table_name, LSET):
+    query = f"""
+        UPDATE metadata
+        SET LSET = '{LSET}'
+        WHERE TABNAME = '{table_name}'
+    """
+    with engine.connect() as connection:
+        connection.execute(query)
+def truncate_table(table_name):
+    query = f'TRUNCATE TABLE {table_name}'
+    with engine.connect() as connection:
+        connection.execute(query)
+
 with DAG(
         dag_id="api_source",
         start_date=datetime(2024, 1, 1, 9),
@@ -48,60 +77,53 @@ with DAG(
         
         @task
         def load_currency_data(currency_df):
-            today = date.today()
-            server = 'host.docker.internal'
-            database = 'ap_airflow'
-            username = 'sa'
-            password = '12345'
+            CET = date.today()
+            LSET = get_LSET('S_currency')
 
-            # Create the connection string for pymssql
-            connection_string = f'mssql+pymssql://{username}:{password}@{server}/{database}'
-            engine = create_engine(connection_string)
+            truncate_table('S_currency')
 
             currency_df['LastUpdated'] = pd.to_datetime(currency_df['LastUpdated']).dt.date
-            with engine.connect() as connection:
-                latest_timestamp_query = "SELECT COALESCE(MAX(LastUpdated), '1900-01-01') FROM currency"
-                latest_timestamp = connection.execute(latest_timestamp_query).scalar()
-            new_records = currency_df[currency_df['LastUpdated'] > latest_timestamp]
-
+            currency_df = currency_df[(currency_df['LastUpdated'] > LSET) & (currency_df['LastUpdated'] <= CET)]
+            print(CET)
+            print(LSET)
             # Insert new records into the staging table
-            if not new_records.empty:
+            if not currency_df.empty:
                 ps_engine = create_engine("postgresql://postgres:postgres@host.docker.internal/logging")
                 errors_list = []
                 with engine.connect() as connection:
-                    for index, row in new_records.iterrows():
+                    for index, row in currency_df.iterrows():
                         try:
                             check_query = f"""
-                                SELECT * FROM currency WHERE code='{row['code']}'
+                                SELECT * FROM S_currency WHERE code='{row['code']}'
                             """
                             current_currency = connection.execute(check_query).scalar_one_or_none()
                             print(current_currency)
                             if current_currency:
                                 update_query = f"""
-                                    UPDATE currency
-                                    SET conv_value={row['value']}, LastUpdated='{row['LastUpdated']}'
+                                    UPDATE S_currency
+                                    SET ConvertValue={row['value']}, LastUpdated='{row['LastUpdated']}'
                                     WHERE code='{row['code']}'
                                 """
                                 connection.execute(update_query)
                             else:
                                 insert_query = f"""
-                                    INSERT INTO currency 
-                                    VALUES ('{row['code']}',{row['value']},'{row['LastUpdated']}')
+                                    INSERT INTO S_currency 
+                                    VALUES ('{row['code']}',{row['value']}, '{row['LastUpdated']}', '{row['LastUpdated']}')
                                 """
                                 connection.execute(insert_query)
                         except Exception as e:
                             print(f"An error occurred while inserting row {row['row_id']}: {e}")
                             err = {
                                 'code': row['code'],
-                                'conv_value': row['value'],
+                                'ConvertValue': row['value'],
                                 'error': str(e),
-                                'LastUpdated': today
+                                'LastUpdated': CET
                             }
                             errors_list.append(err)
 
                 error_df = pd.DataFrame(errors_list)
                 error_df.to_sql('currency_error_logs', ps_engine, if_exists='append', index=False) 
-            
+            update_LSET('S_currency', CET)
 
         api_response = hit_currency_api()
         load_currency_data(flatten_market_data(api_response))             

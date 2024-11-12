@@ -4,7 +4,7 @@
 
 -   Seminar project from HCMUS's 2024 Information Systems for Business Intelligence course.
 
--   Our [demo video](https://youtu.be/l6aBYIMLsJI) on YouTube. _Don't mind the aspect ratio, it got scuffed._
+-   Our [demo video](https://youtu.be/gz1Yc6hcQpc) on YouTube.
 
 ## Getting Started
 
@@ -29,7 +29,7 @@
 
 ## Usage
 
-Kindly browse the [Report](./Report.pdf), or watch our [demo](https://youtu.be/l6aBYIMLsJI).
+Kindly browse the [Report](./Report.pdf), or watch our [demo](https://youtu.be/gz1Yc6hcQpc).
 
 ## Meet The Team
 

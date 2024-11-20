@@ -163,19 +163,6 @@ with DAG(
                             connection.execute(query)
                     except Exception as e:
                         print("Having error insert a new sale_detail row: ", e)
-                        err = {
-                                'SalesOrderID' : row['SalesOrderID'],
-                                'ProductID' : row['ProductID'],
-                                'CustomerID' :row['CustomerID'],
-                                'OrderQty' :row['OrderQty'],
-                                'SystemPrice' : system_price,
-                                'LocalCurrency' : customer_country_currency,
-                                'LocalPrice' : local_price,
-                                'SalesCountry' : customer_country,
-                                'Error': str(e),
-                                'CreatedDate': CET
-                            }
-                        error_list.append(err)
             except Exception as e:
                 print("Having error extracting information", index, " | ", str(e))
                 error_message = str(e)
@@ -192,8 +179,6 @@ with DAG(
                     """ 
                     with engine.connect() as connection:
                             connection.execute(query)
-        error_df = pd.DataFrame(error_list)
-        error_df.to_sql('sale_detail_error_logs', ps_engine, if_exists='append', index=False) 
         update_LSET('NDS_sale_detail', CET)
    
     createing_sale_dt(engine)

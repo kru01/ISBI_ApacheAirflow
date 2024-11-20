@@ -4,7 +4,7 @@
 
 -   Seminar project from HCMUS's 2024 Information Systems for Business Intelligence course.
 
--   Our [demo video](https://youtu.be/gz1Yc6hcQpc) on YouTube.
+-   Our [demo video](https://youtu.be/-q_QpyrBaQo) on YouTube.
 
 ## Getting Started
 
@@ -29,7 +29,7 @@
 
 ## Usage
 
-Kindly browse the [Report](./Report.pdf), or watch our [demo](https://youtu.be/gz1Yc6hcQpc).
+Kindly browse the [Report](./Report.pdf), or watch our [demo](#isbi---etl-and-scheduling-with-apache-airflow).
 
 ## Meet The Team
 

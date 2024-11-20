@@ -7,7 +7,7 @@ import pymssql
 import time
 
 with DAG(
-      dag_id="initialize",
+      dag_id="initialize_general",
       start_date=datetime(2024, 1, 1, 9),
       schedule="@once",
       catchup=False,
@@ -53,11 +53,30 @@ with DAG(
         connection_string = f'mssql+pymssql://{username}:{password}@{server}/{database}'
         engine = create_engine(connection_string)
 
+        #currency START
+        create_table_sql = """
+        CREATE TABLE STAGE_currency(
+            Code nvarchar(10),
+            ConvertValue float,
+            Created date,
+            LastUpdated date,
+
+            CONSTRAINT PK_CURRENCY
+            primary key(code)
+        )
+        """
+        try:
+            with engine.connect() as connection:
+                connection.execute(create_table_sql)
+                print("Table currency created successfully.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        #END 
+
         #country_currency START
         #The S_ prefix is to make it easier to insert metadata
         create_table_sql = """
-        CREATE TABLE S_country_currency(
-            ID int,
+            CREATE TABLE STAGE_country_currency(
             EngName nvarchar(50),
             ISO char(5),
             ISO3 char(5),
@@ -65,8 +84,10 @@ with DAG(
             Currency nvarchar(10),
             Created date,
             LastUpdated date,
-            primary key(id)
-        )
+
+            CONSTRAINT PK_COUNTRY_CURRENCY
+            primary key(ISO3),
+        )  
         """
         try:
             with engine.connect() as connection:
@@ -78,7 +99,7 @@ with DAG(
 
         #customer START
         create_table_sql = """
-        CREATE TABLE S_customer(
+        CREATE TABLE STAGE_customer(
             CustomerID int,
             Title char(5),
             MiddleName nvarchar(20),
@@ -88,7 +109,8 @@ with DAG(
             Phone nvarchar(50),
             Created date,
             LastUpdated date,
-            primary key(CustomerID)
+            CONSTRAINT PK_CUSTOMER
+			PRIMARY KEY(CustomerID),
         )
         """
         try:
@@ -101,7 +123,7 @@ with DAG(
 
         #product START
         create_table_sql = """
-        CREATE TABLE S_product(
+        CREATE TABLE STAGE_product(
             ProductID int,
             PName nvarchar(100),
             Color char(15),
@@ -124,14 +146,15 @@ with DAG(
 
         #sale START
         create_table_sql = """
-        CREATE TABLE S_sale(
+        CREATE TABLE STAGE_sale(
             SalesOrderID int,
             ProductID int,
             CustomerID int,
             OrderQty int,
             Created date,
             LastUpdated date,
-            primary key(SalesOrderID, ProductID)
+			CONSTRAINT PK_SALE
+            PRIMARY KEY(SalesOrderID, ProductID),
         )
         """
         try:
@@ -144,7 +167,8 @@ with DAG(
 
         #sale_detail START
         create_table_sql = """
-        CREATE TABLE S_sale_detail(
+        CREATE TABLE NDS_sale_detail(
+            SALE_DETAIL_SK INT IDENTITY,
             SalesOrderID int,
             ProductID int,
             CustomerID int,
@@ -154,7 +178,6 @@ with DAG(
             LocalPrice float,
             SalesCountry char(5),
             CreatedDate date,
-            primary key(SalesOrderID, ProductID)
         )
         """
         try:
@@ -165,76 +188,7 @@ with DAG(
             print(f"An error occurred: {e}")
         #END
 
-        #currency START
-        create_table_sql = """
-        CREATE TABLE S_currency(
-            Code char(10),
-            ConvertValue float,
-            Created date,
-            LastUpdated date,
-            primary key(code)
-        )
-        """
-        try:
-            with engine.connect() as connection:
-                connection.execute(create_table_sql)
-                print("Table currency created successfully.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-        #END 
-
         return "Initialization completed"
-    
-    @task 
-    def create_metadata_mssql():
-        # Replace with your actual connection details
-        server = 'host.docker.internal'
-        database = 'ap_airflow'
-        username = 'sa'
-        password = '12345'
-
-        # Create the connection string for pymssql
-        connection_string = f'mssql+pymssql://{username}:{password}@{server}/{database}'
-        engine = create_engine(connection_string)
-
-        create_table_sql = f"""
-        CREATE TABLE metadata (
-            ID INT IDENTITY,
-            TABNAME VARCHAR(50),
-            LSET DATETIME,
-
-            CONSTRAINT PK_STAGE
-            PRIMARY KEY(ID)
-        )
-        """
-        try:
-            with engine.connect() as connection:
-                connection.execute(create_table_sql)
-                print("Table metadata created successfully.")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-
-        table_query = f"""
-            SELECT TABLE_NAME, '2000-01-01 00:00:00.000' AS LSET
-            FROM [ap_airflow].INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_TYPE='BASE TABLE'
-            AND TABLE_NAME LIKE 'S_%'
-        """
-        table = (pd.read_sql(table_query, engine))
-        print(table)
-        with engine.connect() as connection:
-            for index, row in table.iterrows():
-                try:
-                    insert_query = f"""
-                        INSERT INTO metadata
-                        VALUES
-                        ('{row['TABLE_NAME']}','{row['LSET']}')
-                    """
-                    connection.execute(insert_query)
-                except Exception as e:
-                    print("Having error insert the metadata: ", e)
-
-        return ("Populate metadata sucessfully")
     
     @task
     def initialize_postgres():
@@ -255,25 +209,6 @@ with DAG(
         conn.close()
 
         ps_engine = create_engine("postgresql://postgres:postgres@host.docker.internal/logging")
-        #For table sale_detail_error_logs
-        conn = ps_engine.connect()
-        conn.execute("commit")
-        result = conn.execute(f"""CREATE TABLE public.sale_detail_error_logs(
-            row_id SERIAL PRIMARY KEY,
-            "SalesOrderID" INT,
-            "ProductID" INT,
-            "CustomerID" INT,
-            "OrderQty" INT,
-            "SystemPrice" FLOAT,
-            "LocalCurrency" CHAR(5),
-            "LocalPrice" FLOAT,
-            "SalesCountry" CHAR(5),
-            "Error" VARCHAR,
-            "CreatedDate" DATE
-            );
-        """)
-        print(result)
-        conn.close()
 
         #For currency_error_log
         conn = ps_engine.connect()
@@ -293,6 +228,7 @@ with DAG(
         conn = ps_engine.connect()
         conn.execute("commit")
         result = conn.execute(f"""CREATE TABLE public.error_log_general(
+            row_id SERIAL PRIMARY KEY,
             "type" CHAR(100),
             "query_string" VARCHAR,
             "Date" DATE
@@ -303,7 +239,7 @@ with DAG(
         conn.close()
 
 
-    create_mssql_database() >> create_table_mssql() >> create_metadata_mssql() >> initialize_postgres()
+    create_mssql_database() >> create_table_mssql() >> initialize_postgres()
 
     #Try to ensure initialize complete before pouring source
 

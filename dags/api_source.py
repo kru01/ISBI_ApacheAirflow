@@ -16,16 +16,16 @@ engine = create_engine(connection_string)
 
 def get_LSET(table_name):
         query = f"""
-            SELECT LSET FROM metadata
-            WHERE TABNAME = '{table_name}'
+            SELECT LSET FROM ETL_DATAFLOW
+            WHERE [NAME] = '{table_name}'
         """
         LSET = pd.read_sql(query, engine)
         return (LSET['LSET'][0]).date()
 def update_LSET(table_name, LSET):
     query = f"""
-        UPDATE metadata
+        UPDATE ETL_DATAFLOW
         SET LSET = '{LSET}'
-        WHERE TABNAME = '{table_name}'
+        WHERE [NAME] = '{table_name}'
     """
     with engine.connect() as connection:
         connection.execute(query)
@@ -78,9 +78,9 @@ with DAG(
         @task
         def load_currency_data(currency_df):
             CET = date.today()
-            LSET = get_LSET('S_currency')
+            LSET = get_LSET('STAGE_currency')
 
-            truncate_table('S_currency')
+            truncate_table('STAGE_currency')
 
             currency_df['LastUpdated'] = pd.to_datetime(currency_df['LastUpdated']).dt.date
             currency_df = currency_df[(currency_df['LastUpdated'] > LSET) & (currency_df['LastUpdated'] <= CET)]
@@ -94,20 +94,20 @@ with DAG(
                     for index, row in currency_df.iterrows():
                         try:
                             check_query = f"""
-                                SELECT * FROM S_currency WHERE code='{row['code']}'
+                                SELECT * FROM STAGE_currency WHERE code='{row['code']}'
                             """
                             current_currency = connection.execute(check_query).scalar_one_or_none()
                             print(current_currency)
                             if current_currency:
                                 update_query = f"""
-                                    UPDATE S_currency
+                                    UPDATE STAGE_currency
                                     SET ConvertValue={row['value']}, LastUpdated='{row['LastUpdated']}'
                                     WHERE code='{row['code']}'
                                 """
                                 connection.execute(update_query)
                             else:
                                 insert_query = f"""
-                                    INSERT INTO S_currency 
+                                    INSERT INTO STAGE_currency 
                                     VALUES ('{row['code']}',{row['value']}, '{row['LastUpdated']}', '{row['LastUpdated']}')
                                 """
                                 connection.execute(insert_query)
@@ -123,7 +123,7 @@ with DAG(
 
                 error_df = pd.DataFrame(errors_list)
                 error_df.to_sql('currency_error_logs', ps_engine, if_exists='append', index=False) 
-            update_LSET('S_currency', CET)
+            update_LSET('STAGE_currency', CET)
 
         api_response = hit_currency_api()
         load_currency_data(flatten_market_data(api_response))             
